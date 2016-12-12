@@ -11,62 +11,24 @@
     <RelativeLayout
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
-        android:minHeight="32dp"
-        android:paddingBottom="2dp">
-
-        <ImageView
-            android:id="@+id/iv_avatar"
-            android:layout_width="@dimen/avatar_size"
-            android:layout_height="@dimen/avatar_size"
-            android:layout_alignParentLeft="true"
-            android:padding="2dp"/>
-
-        <TextView
-            android:id="@+id/tv_author"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_toRightOf="@+id/iv_avatar"
-            android:maxLines="1"
-            android:padding="4dp"
-            android:text=""
-            android:textColor="?attr/colorAccent"
-            android:textSize="@dimen/info_text_size"/>
-
-        <TextView
-            android:id="@+id/tv_thread_type"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_marginRight="2dp"
-            android:layout_toLeftOf="@+id/tv_image_indicator"
-            android:background="@drawable/rounded_corner"
-            android:maxLines="1"
-            android:paddingBottom="1dp"
-            android:paddingLeft="4dp"
-            android:paddingRight="4dp"
-            android:paddingTop="1dp"
-            android:text=""
-            android:textColor="?android:textColorSecondary"
-            android:textSize="12sp"/>
+        android:minHeight="16dp"
+        android:gravity="top">
 
         <com.mikepenz.iconics.view.IconicsTextView
             android:id="@+id/tv_image_indicator"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
             android:layout_toLeftOf="@+id/tv_replycounter"
-            android:padding="2dp"
+            android:paddingRight="2dp"
+            android:paddingTop="4dp"
             android:text="{faw-picture-o}"
             android:textColor="?attr/colorAccent"
-            android:textSize="@dimen/info_text_size"
             android:visibility="gone"/>
 
         <TextView
             android:id="@+id/tv_replycounter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
             android:layout_toLeftOf="@+id/tv_create_time"
             android:maxLines="1"
             android:padding="2dp"
@@ -79,7 +41,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentRight="true"
-            android:layout_centerVertical="true"
             android:maxLines="1"
             android:padding="2dp"
             android:text=""
@@ -95,6 +56,6 @@
         android:gravity="top"
         android:padding="2dp"
         android:text=""
-        android:textSize="18sp"/>
+        android:textSize="20sp"/>
 
 </LinearLayout>

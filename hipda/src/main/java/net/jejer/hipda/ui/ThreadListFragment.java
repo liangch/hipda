@@ -126,9 +126,7 @@ public class ThreadListFragment extends BaseFragment
         mRecyclerView.setHasFixedSize(true);
         mRecyclerView.setLayoutManager(new LinearLayoutManager(mCtx));
         mRecyclerView.addItemDecoration(new SimpleDivider(
-                HiSettingsHelper.getInstance().isNightMode()
-                        ? ContextCompat.getDrawable(mCtx, R.drawable.line_divider_night)
-                        : ContextCompat.getDrawable(mCtx, R.drawable.line_divider_day)));
+                mCtx.obtainStyledAttributes(new int[]{R.attr.list_item_divider}).getDrawable(0)));
 
         RecyclerItemClickListener itemClickListener = new RecyclerItemClickListener(mCtx, new OnItemClickListener());
 

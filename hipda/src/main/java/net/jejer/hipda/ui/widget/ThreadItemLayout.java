@@ -22,9 +22,6 @@ import net.jejer.hipda.utils.Utils;
  */
 public class ThreadItemLayout extends LinearLayout {
 
-    private ImageView mAvatar;
-    private TextView mTvAuthor;
-    private TextView mTvThreadType;
     private TextView mTvTitle;
     private TextView mTvReplycounter;
     private TextView mTvCreateTime;
@@ -36,9 +33,6 @@ public class ThreadItemLayout extends LinearLayout {
         super(context, null, 0);
         inflate(context, R.layout.item_thread_list, this);
 
-        mAvatar = (ImageView) findViewById(R.id.iv_avatar);
-        mTvAuthor = (TextView) findViewById(R.id.tv_author);
-        mTvThreadType = (TextView) findViewById(R.id.tv_thread_type);
         mTvTitle = (TextView) findViewById(R.id.tv_title);
         mTvReplycounter = (TextView) findViewById(R.id.tv_replycounter);
         mTvCreateTime = (TextView) findViewById(R.id.tv_create_time);
@@ -47,8 +41,6 @@ public class ThreadItemLayout extends LinearLayout {
     }
 
     public void setData(final ThreadBean thread) {
-        mTvAuthor.setText(thread.getAuthor());
-
         mTvTitle.setTextSize(HiSettingsHelper.getInstance().getTitleTextSize());
         mTvTitle.setText(thread.getTitle());
 
@@ -63,14 +55,6 @@ public class ThreadItemLayout extends LinearLayout {
         } else
             mTvTitle.setTextColor(ColorHelper.getTextColorPrimary(getContext()));
 
-        if (HiSettingsHelper.getInstance().isShowPostType() &&
-                !TextUtils.isEmpty(thread.getType())) {
-            mTvThreadType.setText(thread.getType());
-            mTvThreadType.setVisibility(View.VISIBLE);
-        } else {
-            mTvThreadType.setVisibility(View.GONE);
-        }
-
         mTvReplycounter.setText(
                 Utils.toCountText(thread.getCountCmts())
                         + "/"
@@ -83,15 +67,6 @@ public class ThreadItemLayout extends LinearLayout {
         } else {
             mTvImageIndicator.setVisibility(View.GONE);
         }
-
-        if (HiSettingsHelper.getInstance().isLoadAvatar()) {
-            mAvatar.setVisibility(View.VISIBLE);
-            GlideHelper.loadAvatar(mGlide, mAvatar, thread.getAvatarUrl());
-        } else {
-            mAvatar.setVisibility(View.GONE);
-        }
-        mAvatar.setTag(R.id.avatar_tag_uid, thread.getAuthorId());
-        mAvatar.setTag(R.id.avatar_tag_username, thread.getAuthor());
     }
 
 }
