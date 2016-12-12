@@ -4,13 +4,13 @@ import android.content.Context;
 import android.os.AsyncTask;
 import android.text.TextUtils;
 
+import net.jejer.hipda.bean.HiSettingsHelper;
 import net.jejer.hipda.bean.PostBean;
 import net.jejer.hipda.bean.PrePostInfoBean;
 import net.jejer.hipda.okhttp.NetworkError;
 import net.jejer.hipda.okhttp.OkHttpHelper;
 import net.jejer.hipda.utils.Constants;
 import net.jejer.hipda.utils.HiUtils;
-import net.jejer.hipda.utils.HttpUtils;
 import net.jejer.hipda.utils.Utils;
 
 import org.jsoup.Jsoup;
@@ -89,46 +89,70 @@ public class PrePostAsyncTask extends AsyncTask<PostBean, Void, PrePostInfoBean>
     }
 
     private PrePostInfoBean parseRsp(Document doc) {
-        PrePostInfoBean result = new PrePostInfoBean();
+        PrePostInfoBean prePostInfo = new PrePostInfoBean();
 
         Elements formhashES = doc.select("input[name=formhash]");
         if (formhashES.size() < 1) {
             mMessage = "页面解析错误";
-            return result;
+            return prePostInfo;
         } else {
-            result.setFormhash(formhashES.first().attr("value"));
+            prePostInfo.setFormhash(formhashES.first().attr("value"));
         }
 
         Elements addtextES = doc.select("textarea");
         if (addtextES.size() < 1) {
-            return result;
+            return prePostInfo;
         } else {
-            result.setText(addtextES.first().text());
+            prePostInfo.setText(addtextES.first().text());
         }
 
         Elements scriptES = doc.select("script");
         if (scriptES.size() < 1) {
-            return result;
+            return prePostInfo;
         } else {
-            result.setUid(HttpUtils.getMiddleString(scriptES.first().data(), "discuz_uid = ", ","));
+            prePostInfo.setUid(Utils.getMiddleString(scriptES.first().data(), "discuz_uid = ", ","));
         }
 
         Elements hashES = doc.select("input[name=hash]");
         if (hashES.size() < 1) {
-            return result;
+            return prePostInfo;
         } else {
-            result.setHash(hashES.first().attr("value"));
+            prePostInfo.setHash(hashES.first().attr("value"));
         }
 
         //for edit post
         Elements subjectES = doc.select("input[name=subject]");
         if (subjectES.size() > 0) {
-            result.setSubject(subjectES.first().attr("value"));
+            prePostInfo.setSubject(subjectES.first().attr("value"));
         }
 
         Elements deleteCheckBox = doc.select("input#delete");
         if (deleteCheckBox.size() > 0) {
-            result.setDeleteable(true);
+            prePostInfo.setDeleteable(true);
+        }
+
+        Elements uploadInfoES = doc.select("div.uploadinfo");
+        if (uploadInfoES.size() > 0) {
+            String uploadInfo = uploadInfoES.first().text();
+            if (uploadInfo.contains("文件尺寸")) {
+                String sizeText = Utils.getMiddleString(uploadInfo.toUpperCase(), "小于", "B").trim();
+                //sizeText : 100KB 8MB
+                try {
+                    float size = Float.parseFloat(sizeText.substring(0, sizeText.length() - 1));
+                    String unit = sizeText.substring(sizeText.length() - 1, sizeText.length());
+                    if (size > 0) {
+                        int maxFileSize = 0;
+                        if ("K".equals(unit)) {
+                            maxFileSize = (int) (size * 1024);
+                        } else if ("M".equals(unit)) {
+                            maxFileSize = (int) (size * 1024 * 1024);
+                        }
+                        if (maxFileSize > 1024 * 1024)
+                            HiSettingsHelper.getInstance().setMaxUploadFileSize(maxFileSize);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
         }
 
         //for replay or quote notify
@@ -136,13 +160,13 @@ public class PrePostAsyncTask extends AsyncTask<PostBean, Void, PrePostInfoBean>
                 || mMode == PostHelper.MODE_QUOTE_POST) {
             Elements authorES = doc.select("input[name=noticeauthor]");
             if (authorES.size() > 0)
-                result.setNoticeauthor(authorES.first().attr("value"));
+                prePostInfo.setNoticeauthor(authorES.first().attr("value"));
             Elements authorMsgES = doc.select("input[name=noticeauthormsg]");
             if (authorMsgES.size() > 0)
-                result.setNoticeauthormsg(authorMsgES.first().attr("value"));
+                prePostInfo.setNoticeauthormsg(authorMsgES.first().attr("value"));
             Elements noticeTrimES = doc.select("input[name=noticetrimstr]");
             if (noticeTrimES.size() > 0)
-                result.setNoticetrimstr(noticeTrimES.first().attr("value"));
+                prePostInfo.setNoticetrimstr(noticeTrimES.first().attr("value"));
         }
 
         Elements unusedImagesES = doc.select("div#unusedimgattachlist table.imglist img");
@@ -150,10 +174,36 @@ public class PrePostAsyncTask extends AsyncTask<PostBean, Void, PrePostInfoBean>
             Element imgE = unusedImagesES.get(i);
             String href = Utils.nullToText(imgE.attr("src"));
             String imgId = Utils.nullToText(imgE.attr("id"));
-            if (href.startsWith("attachments/") && imgId.contains("_")) {
+            if (href.contains("attachments/") && imgId.contains("_")) {
                 imgId = imgId.substring(imgId.lastIndexOf("_") + 1);
                 if (imgId.length() > 0 && TextUtils.isDigitsOnly(imgId)) {
-                    result.addUnusedImage(imgId);
+                    prePostInfo.addImage(imgId);
+                }
+            }
+        }
+
+        //uploaded image list
+        Elements uploadedImagesES = doc.select("div.upfilelist img[id^=image_]");
+        for (int i = 0; i < uploadedImagesES.size(); i++) {
+            Element imgE = uploadedImagesES.get(i);
+            String imgId = Utils.nullToText(imgE.attr("id"));
+            imgId = imgId.substring("image_".length());
+            if (imgId.length() > 0 && TextUtils.isDigitsOnly(imgId)) {
+                prePostInfo.addImage(imgId);
+            }
+        }
+
+        //image as attachments
+        Elements attachmentImages = doc.select("div.upfilelist span a");
+        for (int i = 0; i < attachmentImages.size(); i++) {
+            Element aTag = attachmentImages.get(i);
+            String href = Utils.nullToText(aTag.attr("href"));
+            String onclick = Utils.nullToText(aTag.attr("onclick"));
+            if (href.startsWith("javascript") && onclick.startsWith("insertAttachimgTag")) {
+                //<a href="javascript:;" class="lighttxt" onclick="insertAttachimgTag('2810014')" title="...">Hi_160723_2240.jpg</a>
+                String imgId = Utils.getMiddleString(onclick, "insertAttachimgTag('", "'");
+                if (imgId.length() > 0 && TextUtils.isDigitsOnly(imgId)) {
+                    prePostInfo.addImage(imgId);
                 }
             }
         }
@@ -164,10 +214,10 @@ public class PrePostAsyncTask extends AsyncTask<PostBean, Void, PrePostInfoBean>
             Element typeidEl = typeidES.get(i);
             values.put(typeidEl.val(), typeidEl.text());
             if (i == 0 || "selected".equals(typeidEl.attr("selected")))
-                result.setTypeid(typeidEl.val());
+                prePostInfo.setTypeid(typeidEl.val());
         }
-        result.setTypeValues(values);
-        return result;
+        prePostInfo.setTypeValues(values);
+        return prePostInfo;
     }
 
     @Override

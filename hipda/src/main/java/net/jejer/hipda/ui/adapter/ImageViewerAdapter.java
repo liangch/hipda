@@ -100,7 +100,7 @@ public class ImageViewerAdapter extends PagerAdapter {
         if (!imageInfo.isReady() || !(new File(imageInfo.getPath())).exists()) {
             imageLayout.getProgressBar().setVisibility(View.VISIBLE);
             imageLayout.getProgressBar().setIndeterminate(true);
-            JobMgr.addJob(new GlideImageJob(mRequestManager, imageUrl, JobMgr.PRIORITY_HIGH, mSessionId, true));
+            JobMgr.addJob(new GlideImageJob(imageUrl, JobMgr.PRIORITY_HIGH, mSessionId, true));
         } else {
             displayImage(imageLayout, imageUrl);
         }
@@ -145,7 +145,7 @@ public class ImageViewerAdapter extends PagerAdapter {
                 glideImageView.setUrl(imageUrl);
                 glideImageView.setSingleClickListener();
             } else {
-                scaleImageView.setMinimumDpi(100);
+                scaleImageView.setMinimumDpi(36);
                 scaleImageView.setMinimumTileDpi(160);
                 scaleImageView.setOrientation(SubsamplingScaleImageView.ORIENTATION_USE_EXIF);
                 scaleImageView.setImage(ImageSource.uri(imageInfo.getPath()));

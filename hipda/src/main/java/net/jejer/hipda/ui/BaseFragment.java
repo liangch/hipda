@@ -37,7 +37,6 @@ import com.vanniktech.emoji.listeners.OnSoftKeyboardCloseListener;
 
 import net.jejer.hipda.R;
 import net.jejer.hipda.async.PostSmsAsyncTask;
-import net.jejer.hipda.job.JobMgr;
 import net.jejer.hipda.utils.UIUtils;
 import net.jejer.hipda.utils.Utils;
 
@@ -102,10 +101,14 @@ public abstract class BaseFragment extends Fragment {
 
     void setupFab() {
         if (getActivity() != null) {
-            mMainFab.hide();
-            mMainFab.setEnabled(false);
-            mNotificationFab.hide();
-            mNotificationFab.setEnabled(false);
+            if (mMainFab != null) {
+                mMainFab.hide();
+                mMainFab.setEnabled(false);
+            }
+            if (mNotificationFab != null) {
+                mNotificationFab.hide();
+                mNotificationFab.setEnabled(false);
+            }
         }
     }
 
@@ -120,23 +123,28 @@ public abstract class BaseFragment extends Fragment {
         super.onCreate(savedInstanceState);
         mSessionId = UUID.randomUUID().toString();
         setRetainInstance(true);
+
+        MainFrameActivity mainActivity = ((MainFrameActivity) getActivity());
+        mMainFab = mainActivity.getMainFab();
+        mNotificationFab = mainActivity.getNotificationFab();
+    }
+
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+        setupFab();
     }
 
     @Override
     public void onDestroy() {
         if (mEmojiPopup != null)
             mEmojiPopup.cleanup();
-        if (mSessionId != null)
-            JobMgr.cancelJobs(mSessionId);
         super.onDestroy();
     }
 
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         super.onCreateOptionsMenu(menu, inflater);
-        MainFrameActivity mainActivity = ((MainFrameActivity) getActivity());
-        mMainFab = mainActivity.getMainFab();
-        mNotificationFab = mainActivity.getNotificationFab();
         setupFab();
     }
 

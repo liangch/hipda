@@ -44,7 +44,6 @@ import com.vdurmont.emoji.EmojiParser;
 import net.jejer.hipda.R;
 import net.jejer.hipda.async.PostHelper;
 import net.jejer.hipda.async.PrePostAsyncTask;
-import net.jejer.hipda.async.UploadImgHelper;
 import net.jejer.hipda.bean.HiSettingsHelper;
 import net.jejer.hipda.bean.PostBean;
 import net.jejer.hipda.bean.PrePostInfoBean;
@@ -69,6 +68,7 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public class PostFragment extends BaseFragment {
@@ -124,7 +124,7 @@ public class PostFragment extends BaseFragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        setHasOptionsMenu(true);
+        setHasOptionsMenu(false);
 
         if (getArguments().containsKey(ARG_FID_KEY)) {
             mFid = getArguments().getString(ARG_FID_KEY);
@@ -242,17 +242,39 @@ public class PostFragment extends BaseFragment {
                 }
 
                 public void onFinish() {
-                    tvCountdown.setVisibility(View.INVISIBLE);
+                    tvCountdown.setVisibility(View.GONE);
                     ibReply.setVisibility(View.VISIBLE);
                 }
             }.start();
         } else {
             ibReply.setVisibility(View.VISIBLE);
-            tvCountdown.setVisibility(View.INVISIBLE);
+            tvCountdown.setVisibility(View.GONE);
         }
 
         mIbEmojiSwitch = (ImageButton) view.findViewById(R.id.ib_emoji_switch);
         setUpEmojiPopup(mEtContent, mIbEmojiSwitch);
+
+        setActionBarTitle(R.string.action_reply);
+        setActionBarDisplayHomeAsUpEnabled(true);
+
+        switch (mMode) {
+            case PostHelper.MODE_REPLY_THREAD:
+                setActionBarTitle("回复帖子");
+                break;
+            case PostHelper.MODE_REPLY_POST:
+                setActionBarTitle("回复 " + mFloor + "# " + mFloorAuthor);
+                break;
+            case PostHelper.MODE_QUOTE_POST:
+                setActionBarTitle("引用 " + mFloor + "# " + mFloorAuthor);
+                break;
+            case PostHelper.MODE_NEW_THREAD:
+                setActionBarTitle(mForumName);
+                mEtSubject.setVisibility(View.VISIBLE);
+                break;
+            case PostHelper.MODE_EDIT_POST:
+                setActionBarTitle(getActivity().getResources().getString(R.string.action_edit));
+                break;
+        }
 
         return view;
     }
@@ -340,27 +362,6 @@ public class PostFragment extends BaseFragment {
 
         menu.findItem(R.id.action_upload_img).setIcon(new IconicsDrawable(getActivity(), GoogleMaterial.Icon.gmd_add_a_photo).actionBar().color(Color.WHITE));
 
-        setActionBarTitle(R.string.action_reply);
-        setActionBarDisplayHomeAsUpEnabled(true);
-
-        switch (mMode) {
-            case PostHelper.MODE_REPLY_THREAD:
-                setActionBarTitle("回复帖子");
-                break;
-            case PostHelper.MODE_REPLY_POST:
-                setActionBarTitle("回复 " + mFloor + "# " + mFloorAuthor);
-                break;
-            case PostHelper.MODE_QUOTE_POST:
-                setActionBarTitle("引用 " + mFloor + "# " + mFloorAuthor);
-                break;
-            case PostHelper.MODE_NEW_THREAD:
-                setActionBarTitle(mForumName);
-                mEtSubject.setVisibility(View.VISIBLE);
-                break;
-            case PostHelper.MODE_EDIT_POST:
-                setActionBarTitle(getActivity().getResources().getString(R.string.action_edit));
-                break;
-        }
         super.onCreateOptionsMenu(menu, inflater);
     }
 
@@ -429,7 +430,7 @@ public class PostFragment extends BaseFragment {
             return;
         }
 
-        String subjectText = mEtSubject.getText().toString();
+        final String subjectText = mEtSubject.getText().toString();
         if (mEtSubject.getVisibility() == View.VISIBLE) {
             if (Utils.getWordCount(subjectText) < 5) {
                 Toast.makeText(getActivity(), "主题字数必须大于 5", Toast.LENGTH_LONG).show();
@@ -441,28 +442,70 @@ public class PostFragment extends BaseFragment {
             }
         }
 
-        String replyText = mEtContent.getText().toString();
+        final String replyText = mEtContent.getText().toString();
         if (Utils.getWordCount(replyText) < 5) {
             Toast.makeText(getActivity(), "帖子内容字数必须大于 5", Toast.LENGTH_LONG).show();
             return;
         }
 
-        if (mUploadImages.size() > 0) {
-            boolean needWarn = false;
-            for (UploadImage uploadImage : mUploadImages.values()) {
-                if (isValidImgId(uploadImage.getImgId())) {
-                    String attachStr = "[attachimg]" + uploadImage.getImgId() + "[/attachimg]";
-                    if (!replyText.contains(attachStr)) {
-                        needWarn = true;
-                    }
+        UIUtils.hideSoftKeyboard(getActivity());
+
+        final List<String> extraImgs = new ArrayList<>();
+        if (mPrePostInfo.getAllImages().size() > 0) {
+            for (String imgId : mPrePostInfo.getAllImages()) {
+                String attachStr = "[attachimg]" + imgId + "[/attachimg]";
+                if (!replyText.contains(attachStr)) {
+                    extraImgs.add(imgId);
                 }
             }
-            if (needWarn) {
-                Toast.makeText(getActivity(), "橙色边框图片未添加到帖子中", Toast.LENGTH_LONG).show();
+            if (extraImgs.size() > 0) {
+                Dialog dialog = new AlertDialog.Builder(getActivity())
+                        .setTitle("未使用的图片")
+                        .setMessage(HtmlCompat.fromHtml("有 " + extraImgs.size() + " 张图片未以图片标签[attachimg]形式显示在正文中<br>"
+                                + "<br>如果您希望其他用户看到这些图片，请选择 <b>保留图片</b>"
+                                + "<br>否则请选择 <b>丢弃图片</b>"))
+                        .setPositiveButton("保留图片",
+                                new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        StringBuilder sb = new StringBuilder();
+                                        String tail = HiSettingsHelper.getInstance().getTailStr();
+                                        String content;
+                                        boolean appendTail = false;
+                                        if (replyText.trim().endsWith(tail)) {
+                                            content = replyText.substring(0, replyText.lastIndexOf(tail));
+                                            appendTail = true;
+                                        } else {
+                                            content = replyText;
+                                        }
+                                        sb.append(content).append("\n");
+                                        for (String imgId : extraImgs) {
+                                            sb.append("[attachimg]").append(imgId).append("[/attachimg]").append("\n");
+                                            mPrePostInfo.addAttach(imgId);
+                                        }
+                                        if (appendTail)
+                                            sb.append(tail);
+                                        startPostJob(subjectText, sb.toString());
+                                    }
+                                })
+                        .setNeutralButton("丢弃图片",
+                                new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        for (String imgId : extraImgs) {
+                                            mPrePostInfo.addAttachdel(imgId);
+                                        }
+                                        startPostJob(subjectText, replyText);
+                                    }
+                                }).create();
+                dialog.show();
                 return;
             }
         }
+        startPostJob(subjectText, replyText);
+    }
 
+    private void startPostJob(String subjectText, String replyText) {
         PostBean postBean = new PostBean();
         postBean.setContent(replyText);
         postBean.setTid(mTid);
@@ -474,8 +517,6 @@ public class PostFragment extends BaseFragment {
         postBean.setDelete(mDeleteMode);
 
         JobMgr.addJob(new PostJob(mParentSessionId, mMode, mPrePostInfo, postBean));
-
-        UIUtils.hideSoftKeyboard(getActivity());
     }
 
     @Override
@@ -493,29 +534,51 @@ public class PostFragment extends BaseFragment {
 
         if (resultCode == Activity.RESULT_OK && requestCode == SELECT_PICTURE) {
             boolean findData = false;
+            boolean duplicate = false;
+            StringBuilder sb = new StringBuilder();
+            sb.append("Device: ").append(Utils.getDeviceName()).append("\n");
+            sb.append("Version: ").append(Build.VERSION.SDK_INT).append("\n");
             Collection<Uri> uris = new ArrayList<>();
-            if (Build.VERSION.SDK_INT >= 18) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
                 ClipData clipData = intent.getClipData();
+                sb.append("ClipData: ").append(clipData == null ? "null" : clipData.getItemCount()).append("\n");
                 if (clipData != null && clipData.getItemCount() > 0) {
                     for (int i = 0; i < clipData.getItemCount(); i++) {
-                        Uri tmp = clipData.getItemAt(i).getUri();
-                        if (!mUploadImages.containsKey(tmp))
-                            uris.add(tmp);
+                        Uri uri = clipData.getItemAt(i).getUri();
+                        if (!mUploadImages.containsKey(uri)) {
+                            uris.add(uri);
+                            sb.append("ClipData: item ").append(i).append(" added").append("\n");
+                        } else {
+                            duplicate = true;
+                            sb.append("ClipData: item ").append(i).append(" dup").append("\n");
+                        }
                     }
                     findData = true;
                 }
             }
             if (!findData && intent.getData() != null) {
-                if (!mUploadImages.containsKey(intent.getData()))
+                if (!mUploadImages.containsKey(intent.getData())) {
                     uris.add(intent.getData());
+                    sb.append("Data: ").append(" added").append("\n");
+                } else {
+                    duplicate = true;
+                    sb.append("Data: ").append(" dup").append("\n");
+                }
             }
 
+            if (intent.getData() == null)
+                sb.append("Data: null").append("\n");
+
             if (uris.size() == 0) {
-                Toast.makeText(getActivity(), "选择的图片重复", Toast.LENGTH_SHORT).show();
+                if (duplicate) {
+                    Toast.makeText(getActivity(), "选择的图片重复", Toast.LENGTH_SHORT).show();
+                } else {
+                    UIUtils.errorSnack(getView(), "无法获取图片信息", sb.toString());
+                }
                 return;
             }
 
-            mProgressDialog = HiProgressDialog.show(getActivity(), "处理中...");
+            mProgressDialog = HiProgressDialog.show(getActivity(), "正在上传...");
             if (mPrePostInfo != null) {
                 JobMgr.addJob(new ImageUploadJob(mSessionId, mPrePostInfo.getUid(), mPrePostInfo.getHash(), uris.toArray(new Uri[uris.size()])));
             } else {
@@ -597,8 +660,10 @@ public class PostFragment extends BaseFragment {
                 imgTxt = "\n" + imgTxt;
             mEtContent.getText().insert(selectionStart, imgTxt);
             mEtContent.setSelection(selectionStart + imgTxt.length());
+            mContentPosition = selectionStart + imgTxt.length();
             mEtContent.requestFocus();
             mPrePostInfo.addAttach(imgId);
+            mPrePostInfo.addImage(imgId);
         }
     }
 
@@ -650,6 +715,7 @@ public class PostFragment extends BaseFragment {
         if (mPrePostInfo == null)
             return;
 
+        setHasOptionsMenu(true);
         getActivity().invalidateOptionsMenu();
 
         mTypeValues = mPrePostInfo.getTypeValues();
@@ -682,7 +748,7 @@ public class PostFragment extends BaseFragment {
                 mTvQuoteText.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        UIUtils.showMessageDialog(getActivity(), mFloor + "# " + mFloorAuthor, mText);
+                        UIUtils.showMessageDialog(getActivity(), mFloor + "# " + mFloorAuthor, mText, true);
                     }
                 });
             }
@@ -781,18 +847,7 @@ public class PostFragment extends BaseFragment {
     }
 
     private void imageProcess(int total, int current, int percentage) {
-        StringBuilder sb = new StringBuilder();
-        if (total > 1)
-            sb.append("(" + (current + 1) + "/" + total + ")");
-
-        if (percentage == UploadImgHelper.STAGE_UPLOADING) {
-            sb.append("正在压缩(~" + Utils.toSizeText(UploadImgHelper.MAX_IMAGE_FILE_SIZE) + ")...");
-        } else if (percentage == 100) {
-            sb.append("服务器处理中...");
-        } else {
-            sb.append("正在上传 " + percentage + "%");
-        }
-        mProgressDialog.setMessage(sb.toString());
+        mProgressDialog.setMessage("正在上传... (" + (current + 1) + "/" + total + ")");
     }
 
     private void imageDone(ImageUploadEvent event) {

@@ -110,11 +110,11 @@ public class ThreadDetailActionModeCallback implements ActionMode.Callback {
                 }
                 mode.finish();
                 return true;
-            case R.id.action_author_only_mode:
+            case R.id.action_only_floor_author:
                 if (mFragment.isInAuthorOnlyMode()) {
                     mFragment.cancelAuthorOnlyMode();
                 } else {
-                    mFragment.enterAuthorOnlyMode(mDetailBean.getUid(), mDetailBean.getAuthor());
+                    mFragment.enterAuthorOnlyMode(mDetailBean.getUid());
                 }
                 mode.finish();
                 return true;
@@ -122,7 +122,8 @@ public class ThreadDetailActionModeCallback implements ActionMode.Callback {
                 if (mFragment.getActivity() != null) {
                     UIUtils.showMessageDialog(mFragment.getActivity(),
                             mDetailBean.getFloor() + "# " + mDetailBean.getAuthor(),
-                            mDetailBean.getContents().getCopyText().trim());
+                            mDetailBean.getContents().getCopyText().trim(),
+                            true);
                 }
                 mode.finish();
                 return true;
@@ -130,7 +131,7 @@ public class ThreadDetailActionModeCallback implements ActionMode.Callback {
                 Intent sharingIntent = new Intent(android.content.Intent.ACTION_SEND);
                 sharingIntent.setType("text/plain");
                 String shareBody = "帖子 ：" + mTitle + "\n" +
-                        HiUtils.DetailListUrl + mTid + "\n" +
+                        HiUtils.RedirectToPostUrl.replace("{tid}", mTid).replace("{pid}", mDetailBean.getPostId()) + "\n" +
                         mDetailBean.getFloor() + "#  作者 ：" + mDetailBean.getAuthor() + "\n\n" +
                         mDetailBean.getContents().getCopyText();
                 sharingIntent.putExtra(android.content.Intent.EXTRA_TEXT, shareBody);
@@ -163,11 +164,11 @@ public class ThreadDetailActionModeCallback implements ActionMode.Callback {
             item.setVisible(false);
         }
 
-        MenuItem menuItemAuthor = menu.findItem(R.id.action_author_only_mode);
+        MenuItem menuItemAuthor = menu.findItem(R.id.action_only_floor_author);
         if (mFragment.isInAuthorOnlyMode()) {
             menuItemAuthor.setTitle(R.string.action_show_all);
         } else {
-            menuItemAuthor.setTitle(R.string.action_author_only_mode);
+            menuItemAuthor.setTitle(R.string.action_only_floor_author);
         }
 
         mode.setTitle(mDetailBean.getFloor() + "# " + mDetailBean.getAuthor());

@@ -111,7 +111,6 @@ public class ThreadDetailFragment extends BaseFragment {
     private String mTid;
     private String mGotoPostId;
     private String mAuthorId;
-    private String mAuthor;
     private String mTitle;
     private String mFid;
     private XRecyclerView mRecyclerView;
@@ -277,7 +276,6 @@ public class ThreadDetailFragment extends BaseFragment {
                     JobMgr.addJob(new PostJob(mSessionId, PostHelper.MODE_QUICK_REPLY, null, postBean));
 
                     UIUtils.hideSoftKeyboard(getActivity());
-                    ((MainFrameActivity) getActivity()).getMainFab().show();
                 }
             }
         });
@@ -361,6 +359,15 @@ public class ThreadDetailFragment extends BaseFragment {
             }
         }
 
+        MenuItem authorMenuItem = menu.findItem(R.id.action_only_author);
+        if (authorMenuItem != null) {
+            if (isInAuthorOnlyMode()) {
+                authorMenuItem.setTitle(R.string.action_show_all);
+            } else {
+                authorMenuItem.setTitle(R.string.action_only_author);
+            }
+        }
+
         if (mShowAllMenuItem != null) {
             if (TextUtils.isEmpty(mAuthorId)) {
                 mShowAllMenuItem.setVisible(false);
@@ -376,6 +383,18 @@ public class ThreadDetailFragment extends BaseFragment {
             case android.R.id.home:
                 // Implemented in activity
                 return false;
+            case R.id.action_only_author:
+                if (isInAuthorOnlyMode()) {
+                    cancelAuthorOnlyMode();
+                } else {
+                    if (mCache.get(1) != null) {
+                        DetailBean detailBean = mCache.get(1).getAll().get(0);
+                        enterAuthorOnlyMode(detailBean.getUid());
+                    } else {
+                        enterAuthorOnlyMode(ThreadDetailJob.FIND_AUTHOR_ID);
+                    }
+                }
+                return true;
             case R.id.action_open_url:
                 String url = HiUtils.DetailListUrl + mTid;
                 if (mCurrentPage > 1)
@@ -437,7 +456,7 @@ public class ThreadDetailFragment extends BaseFragment {
                 showPost("");
                 return true;
             case R.id.action_refresh_detail:
-                mLoadingView.setState(ContentLoadingView.LOADING);
+                mLoadingView.setState(ContentLoadingView.LOAD_NOW);
                 refresh();
                 return true;
             case R.id.action_add_favorite:
@@ -462,30 +481,33 @@ public class ThreadDetailFragment extends BaseFragment {
 
     @Override
     void setupFab() {
-        if (!mDataReceived) {
-            mMainFab.hide();
-        } else {
-            mMainFab.setEnabled(true);
-            mMainFab.show();
-        }
-
-        mMainFab.setImageResource(R.drawable.ic_reply_white_24dp);
-        mMainFab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                showQuickReply();
-                (new Handler()).postDelayed(new Runnable() {
-                    public void run() {
-                        mEtReply.requestFocus();
-                        mEtReply.dispatchTouchEvent(MotionEvent.obtain(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(), MotionEvent.ACTION_DOWN, 0, 0, 0));
-                        mEtReply.dispatchTouchEvent(MotionEvent.obtain(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 0, 0, 0));
-                    }
-                }, 100);
+        if (mMainFab != null) {
+            if (!mDataReceived) {
+                mMainFab.hide();
+            } else {
+                mMainFab.setEnabled(true);
+                mMainFab.show();
             }
-        });
 
-        mNotificationFab.setEnabled(false);
-        mNotificationFab.hide();
+            mMainFab.setImageResource(R.drawable.ic_reply_white_24dp);
+            mMainFab.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    showQuickReply();
+                    (new Handler()).postDelayed(new Runnable() {
+                        public void run() {
+                            mEtReply.requestFocus();
+                            mEtReply.dispatchTouchEvent(MotionEvent.obtain(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(), MotionEvent.ACTION_DOWN, 0, 0, 0));
+                            mEtReply.dispatchTouchEvent(MotionEvent.obtain(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 0, 0, 0));
+                        }
+                    }, 100);
+                }
+            });
+        }
+        if (mNotificationFab != null) {
+            mNotificationFab.setEnabled(false);
+            mNotificationFab.hide();
+        }
     }
 
     private void showPost(String text) {
@@ -526,10 +548,10 @@ public class ThreadDetailFragment extends BaseFragment {
         return !TextUtils.isEmpty(mAuthorId);
     }
 
-    public void enterAuthorOnlyMode(String authorId, String author) {
+    public void enterAuthorOnlyMode(String authorId) {
         mAuthorId = authorId;
-        mAuthor = author;
         mCurrentPage = 1;
+        mGotoFloor = FIRST_FLOOR;
         mLoadingView.setState(ContentLoadingView.LOAD_NOW);
         mShowAllMenuItem.setVisible(true);
         startJob(mCurrentPage, FETCH_NORMAL, POSITION_NORMAL);
@@ -537,8 +559,8 @@ public class ThreadDetailFragment extends BaseFragment {
 
     public void cancelAuthorOnlyMode() {
         mAuthorId = "";
-        mAuthor = "";
         mCurrentPage = 1;
+        mGotoFloor = FIRST_FLOOR;
         mLoadingView.setState(ContentLoadingView.LOAD_NOW);
         mShowAllMenuItem.setVisible(false);
         startJob(mCurrentPage, FETCH_NORMAL, POSITION_NORMAL);
@@ -556,7 +578,16 @@ public class ThreadDetailFragment extends BaseFragment {
 
         @Override
         public void onLongItemClick(View view, int position) {
-            DetailBean detailBean = mDetailAdapter.getItem(position);
+//            DetailBean detailBean = mDetailAdapter.getItem(position);
+            DetailBean detailBean = null;
+            TextView floorView = (TextView) view.findViewById(R.id.floor);
+            if (floorView != null) {
+                String floor = floorView.getText().toString();
+                if (!TextUtils.isEmpty(floor) && TextUtils.isDigitsOnly(floor)) {
+                    int pos = mDetailAdapter.getPositionByFloor(Integer.parseInt(floor));
+                    detailBean = mDetailAdapter.getItem(pos);
+                }
+            }
             if (detailBean == null) {
                 return;
             }
@@ -738,7 +769,7 @@ public class ThreadDetailFragment extends BaseFragment {
     private void showQuickReply() {
         int timeToWait = PostHelper.getWaitTimeToPost();
         if (timeToWait > 0) {
-            mIbPostReply.setVisibility(View.INVISIBLE);
+            mIbPostReply.setVisibility(View.GONE);
             mTvCountdown.setText(timeToWait + "");
             mTvCountdown.setVisibility(View.VISIBLE);
             mCountDownTimer = new CountDownTimer(timeToWait * 1000, 500) {
@@ -748,13 +779,13 @@ public class ThreadDetailFragment extends BaseFragment {
                 }
 
                 public void onFinish() {
-                    mTvCountdown.setVisibility(View.INVISIBLE);
+                    mTvCountdown.setVisibility(View.GONE);
                     mIbPostReply.setVisibility(View.VISIBLE);
                 }
             }.start();
         } else {
             mIbPostReply.setVisibility(View.VISIBLE);
-            mTvCountdown.setVisibility(View.INVISIBLE);
+            mTvCountdown.setVisibility(View.GONE);
         }
         mQuickReply.setVisibility(View.VISIBLE);
         mQuickReply.bringToFront();
@@ -815,7 +846,9 @@ public class ThreadDetailFragment extends BaseFragment {
                     mBlinkPostId = null;
                     View view = mLayoutManager.findViewByPosition(pos);
                     if (view != null && ViewCompat.isAttachedToWindow(view)) {
-                        view.findViewById(R.id.floor).startAnimation(mBlinkAnim);
+                        View floorView = view.findViewById(R.id.floor);
+                        if (floorView != null)
+                            floorView.startAnimation(mBlinkAnim);
                     }
                 }
             }, 150);
@@ -929,7 +962,7 @@ public class ThreadDetailFragment extends BaseFragment {
     }
 
     public void startImageGallery(int imageIndex, GlideImageView imageView) {
-        if (!HiApplication.isActivityVisible()) {
+        if (!HiApplication.isActivityVisible() || getActivity() == null) {
             return;
         }
 
@@ -987,6 +1020,8 @@ public class ThreadDetailFragment extends BaseFragment {
             DetailListBean details = event.mData;
 
             mMaxPostInPage = HiSettingsHelper.getInstance().getMaxPostsInPage();
+            if (ThreadDetailJob.FIND_AUTHOR_ID.equals(mAuthorId))
+                mAuthorId = event.mAuthorId;
 
             // Set title
             if (details.getTitle() != null && !details.getTitle().isEmpty()) {
